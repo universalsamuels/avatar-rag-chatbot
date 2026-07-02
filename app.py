@@ -91,23 +91,6 @@ st.markdown("""
         margin-bottom: 32px;
     }
 
-    .chips-row {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        justify-content: center;
-        margin-bottom: 40px;
-    }
-
-    .chip {
-        background: #1e1e2e;
-        border: 1px solid #2e2e45;
-        color: #ccc;
-        padding: 8px 16px;
-        border-radius: 20px;
-        font-size: 0.85rem;
-    }
-
     .user-bubble {
         display: flex;
         justify-content: flex-end;
@@ -206,6 +189,21 @@ st.markdown("""
         color: #e0e0e0 !important;
         border-radius: 12px !important;
     }
+
+    div.stButton > button {
+        background: #1e1e2e;
+        border: 1px solid #2e2e45;
+        color: #ccc;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        transition: all 0.2s;
+    }
+
+    div.stButton > button:hover {
+        border-color: #E85D26;
+        color: #fff;
+        background: #2a2a40;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -214,12 +212,14 @@ st.markdown("""
 @st.cache_resource
 def get_embedding_model():
     from sentence_transformers import SentenceTransformer
-    return SentenceTransformer(EMBEDDING_MODEL, local_files_only=True)
+    try:
+        return SentenceTransformer(EMBEDDING_MODEL, local_files_only=True)
+    except:
+        return SentenceTransformer(EMBEDDING_MODEL)
 
 @st.cache_resource
 def get_chroma_collection():
     from sentence_transformers import SentenceTransformer
-    import os
 
     client = chromadb.PersistentClient(path=DB_DIR)
     existing = [c.name for c in client.list_collections()]
@@ -239,7 +239,7 @@ def get_chroma_collection():
             start = 0
             i = 0
             while start < len(text):
-                chunk = text[start:start+500].strip()
+                chunk = text[start:start + 500].strip()
                 if chunk:
                     all_chunks.append(chunk)
                     all_ids.append(f"{filename}_chunk_{i}")
@@ -249,12 +249,12 @@ def get_chroma_collection():
 
         BATCH_SIZE = 2000
         for i in range(0, len(all_chunks), BATCH_SIZE):
-            embeddings = model.encode(all_chunks[i:i+BATCH_SIZE]).tolist()
+            embeddings = model.encode(all_chunks[i:i + BATCH_SIZE]).tolist()
             collection.add(
-                documents=all_chunks[i:i+BATCH_SIZE],
+                documents=all_chunks[i:i + BATCH_SIZE],
                 embeddings=embeddings,
-                ids=all_ids[i:i+BATCH_SIZE],
-                metadatas=all_metadatas[i:i+BATCH_SIZE]
+                ids=all_ids[i:i + BATCH_SIZE],
+                metadatas=all_metadatas[i:i + BATCH_SIZE]
             )
         return collection
 
@@ -314,6 +314,9 @@ def ask(question, collection):
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "selected_suggestion" not in st.session_state:
+    st.session_state.selected_suggestion = None
+
 
 # ---------- BRAND BAR ----------
 st.markdown("""
@@ -335,15 +338,44 @@ if not st.session_state.messages:
             characters, bending, nations, lore, history, and more.
         </div>
     </div>
-    <div class="chips-row">
-        <div class="chip">Who is Aang?</div>
-        <div class="chip">How does metalbending work?</div>
-        <div class="chip">Why was Zuko banished?</div>
-        <div class="chip">What are the four nations?</div>
-        <div class="chip">Who invented metalbending?</div>
-        <div class="chip">What is the Avatar State?</div>
+    """, unsafe_allow_html=True)
+
+    suggestions = [
+        "Who is Aang?",
+        "How does metalbending work?",
+        "Why was Zuko banished?",
+        "What are the four nations?",
+        "Who invented metalbending?",
+        "What is the Avatar State?",
+    ]
+    col1, col2, col3 = st.columns(3)
+    for i, suggestion in enumerate(suggestions):
+        col = [col1, col2, col3][i % 3]
+        with col:
+            if st.button(suggestion, use_container_width=True):
+                st.session_state.selected_suggestion = suggestion
+                st.rerun()
+
+
+# ---------- HANDLE SUGGESTION CLICK ----------
+if st.session_state.selected_suggestion:
+    prompt = st.session_state.selected_suggestion
+    st.session_state.selected_suggestion = None
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.spinner("🌀 Searching the lore..."):
+        collection = load_collection()
+        answer, sources = ask(prompt, collection)
+    sources_html = ""
+    if sources:
+        badges = "".join(f'<span class="source-badge">📄 {s}</span>' for s in sources)
+        sources_html = f'<div class="source-label">Sources</div>{badges}'
+    st.markdown(f"""
+    <div class="bot-bubble">
+        <div class="bot-avatar">🌊</div>
+        <div class="bot-bubble-inner">{answer}{sources_html}</div>
     </div>
     """, unsafe_allow_html=True)
+    st.session_state.messages.append({"role": "assistant", "content": answer, "sources": sources})
 
 
 # ---------- RENDER CHAT HISTORY ----------
