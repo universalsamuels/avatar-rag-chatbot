@@ -23,7 +23,10 @@ EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 GROQ_MODEL = "llama-3.3-70b-versatile"
 TOP_K = 4
 
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+try:
+    groq_client = Groq(api_key=st.secrets["GROQ_API_KEY"])
+except:
+    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # ---------- PAGE CONFIG ----------
 st.set_page_config(
