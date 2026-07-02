@@ -218,8 +218,47 @@ def get_embedding_model():
 
 @st.cache_resource
 def get_chroma_collection():
+    from sentence_transformers import SentenceTransformer
+    import os
+
     client = chromadb.PersistentClient(path=DB_DIR)
-    return client.get_collection(name=COLLECTION_NAME)
+    existing = [c.name for c in client.list_collections()]
+
+    if COLLECTION_NAME not in existing:
+        st.info("🌀 First launch — building knowledge base from data files. This takes a few minutes...")
+        model = SentenceTransformer(EMBEDDING_MODEL)
+        collection = client.create_collection(name=COLLECTION_NAME)
+
+        all_chunks, all_ids, all_metadatas = [], [], []
+
+        for filename in os.listdir("data"):
+            if not filename.endswith(".txt"):
+                continue
+            with open(os.path.join("data", filename), "r", encoding="utf-8") as f:
+                text = f.read()
+            start = 0
+            i = 0
+            while start < len(text):
+                chunk = text[start:start+500].strip()
+                if chunk:
+                    all_chunks.append(chunk)
+                    all_ids.append(f"{filename}_chunk_{i}")
+                    all_metadatas.append({"source": filename})
+                    i += 1
+                start += 400
+
+        BATCH_SIZE = 2000
+        for i in range(0, len(all_chunks), BATCH_SIZE):
+            embeddings = model.encode(all_chunks[i:i+BATCH_SIZE]).tolist()
+            collection.add(
+                documents=all_chunks[i:i+BATCH_SIZE],
+                embeddings=embeddings,
+                ids=all_ids[i:i+BATCH_SIZE],
+                metadatas=all_metadatas[i:i+BATCH_SIZE]
+            )
+        return collection
+
+    return client.get_collection(name=COLLECTION_NAME)s
 
 def load_collection():
     return get_chroma_collection()
