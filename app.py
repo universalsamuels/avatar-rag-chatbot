@@ -354,7 +354,6 @@ if not st.session_state.messages:
         with col:
             if st.button(suggestion, use_container_width=True):
                 st.session_state.selected_suggestion = suggestion
-                st.rerun()
 
 
 # ---------- HANDLE SUGGESTION CLICK ----------
