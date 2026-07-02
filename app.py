@@ -258,7 +258,7 @@ def get_chroma_collection():
             )
         return collection
 
-    return client.get_collection(name=COLLECTION_NAME)s
+    return client.get_collection(name=COLLECTION_NAME)
 
 def load_collection():
     return get_chroma_collection()
